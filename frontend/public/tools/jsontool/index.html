@@ -1,0 +1,1276 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JSON 数据比对工具</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/element-plus@2.7.6/dist/index.css">
+<style>
+  :root{
+    --primary:#409eff;--success:#67c23a;--warning:#e6a23c;--danger:#f56c6c;--info:#909399;
+    --bg:#f5f7fa;--card-bg:#fff;--border:#e4e7ed;--text:#303133;--muted:#909399;
+  }
+  *{box-sizing:border-box}
+  [v-cloak]{display:none}
+  html,body{margin:0;padding:0;height:100%}
+  body{background:var(--bg);color:var(--text);font-size:14px;
+       font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei","Segoe UI",Roboto,sans-serif;}
+  #app{min-height:100vh}
+  .app-header{background:linear-gradient(135deg,#4568dc,#b06ab3);color:#fff;padding:14px 24px;
+              box-shadow:0 2px 8px rgba(0,0,0,.08);display:flex;justify-content:space-between;align-items:center}
+  .app-header h1{margin:0;font-size:18px;font-weight:600;letter-spacing:.5px}
+  .app-header .subtitle{font-size:12px;opacity:.85;margin-left:10px;font-weight:normal}
+  .app-header .tips{font-size:12px;opacity:.85}
+  .main-container{max-width:1680px;margin:0 auto;padding:14px}
+
+  .editor-row{margin-bottom:12px}
+  .editor-card{background:var(--card-bg);border:1px solid var(--border);border-radius:6px;overflow:hidden}
+  .editor-header{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;
+                 background:#fafafa;border-bottom:1px solid var(--border)}
+  .editor-label{font-weight:600;color:var(--text)}
+  .editor-label .badge{display:inline-block;background:var(--primary);color:#fff;padding:1px 8px;
+                       border-radius:10px;font-size:12px;margin-left:6px;font-weight:normal}
+  .monaco-wrap{position:relative;height:340px}
+  .monaco-editor-container{height:100%}
+  .drop-overlay{position:absolute;inset:0;background:rgba(64,158,255,.15);
+                border:2px dashed var(--primary);display:none;
+                align-items:center;justify-content:center;color:#409eff;
+                font-size:18px;z-index:9;pointer-events:none;}
+  .monaco-wrap.dragging .drop-overlay{display:flex}
+  .editor-footer{padding:8px 12px;border-top:1px solid var(--border);background:#fafafa}
+
+  .section-card{margin-bottom:12px}
+  .card-header{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+  .field-list{max-height:200px;overflow-y:auto;padding:2px 0}
+  .field-list .el-checkbox{margin-right:18px;margin-bottom:6px}
+  .field-item-key .el-checkbox__label{color:var(--primary);font-weight:600}
+  .empty-hint{color:var(--muted);padding:10px 0}
+
+  .mode-actions{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px}
+  .section-label{font-weight:600;margin-right:8px}
+
+  .stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+  .stat-item{background:#fff;border:1px solid var(--border);border-radius:6px;padding:10px 14px}
+  .stat-item .stat-label{font-size:12px;color:var(--muted);margin-bottom:4px}
+  .stat-item .stat-value{font-size:22px;font-weight:600}
+  .stat-same .stat-value{color:var(--success)}
+  .stat-a-only .stat-value{color:var(--warning)}
+  .stat-b-only .stat-value{color:var(--warning)}
+  .stat-diff .stat-value{color:var(--danger)}
+  .stat-warn{border-color:var(--warning);background:#fdf6ec}
+  .stat-warn .stat-value{color:var(--warning);font-size:18px}
+  .stat-duration .stat-value{color:var(--info);font-size:18px}
+
+  .tab-toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:8px}
+  .diff-value-a{color:var(--danger);font-family:Consolas,Monaco,monospace}
+  .diff-value-b{color:var(--success);font-family:Consolas,Monaco,monospace}
+  .key-cell{font-family:Consolas,Monaco,monospace;color:#606266}
+
+  .loading-mask{position:fixed;inset:0;background:rgba(255,255,255,.72);display:flex;flex-direction:column;
+                align-items:center;justify-content:center;z-index:9999;font-size:14px;color:#409eff;gap:14px}
+  .loading-mask .spinner{width:44px;height:44px;border:3px solid #ecf5ff;border-top-color:#409eff;
+                         border-radius:50%;animation:jc-spin .8s linear infinite}
+  .loading-mask .sub-text{color:#909399;font-size:12px}
+  @keyframes jc-spin{to{transform:rotate(360deg)}}
+
+  .cand-panel{max-height:420px;overflow-y:auto;margin:-8px -4px}
+  .cand-empty{color:var(--muted);text-align:center;padding:24px 0}
+  .cand-item{padding:8px 10px;border:1px solid transparent;border-radius:4px;cursor:pointer;margin-bottom:4px;transition:all .12s}
+  .cand-item:hover{background:#ecf5ff;border-color:#c6e2ff}
+  .cand-item.is-best{background:#f0f9ff;border-color:#c6e2ff}
+  .cand-item .cand-path{font-family:Consolas,Monaco,monospace;color:#409eff;font-size:13px;
+                        word-break:break-all;margin-bottom:4px;display:flex;align-items:center;gap:6px}
+  .cand-item .cand-tag-best{background:#f56c6c;color:#fff;font-size:11px;padding:0 6px;border-radius:8px;font-family:sans-serif}
+  .cand-item .cand-meta{display:flex;flex-wrap:wrap;gap:6px 12px;font-size:12px;color:#606266}
+  .cand-item .cand-fields{color:var(--muted);font-family:Consolas,Monaco,monospace;font-size:12px}
+  .cand-item .cand-count{color:var(--success);font-weight:600}
+  .cand-loading{padding:24px;text-align:center;color:var(--muted);font-size:13px}
+
+  /* 路径输入行: 输入框自适应 + 两个按钮固定宽度, 缩放/分辨率不影响 */
+  .path-row{display:flex;align-items:center;gap:6px;width:100%;flex-wrap:nowrap}
+  .path-row .path-input{flex:1 1 auto;min-width:0}
+  .path-row .path-btn{flex:0 0 auto;min-width:56px;padding-left:10px;padding-right:10px;white-space:nowrap}
+</style>
+</head>
+<body>
+<div id="app" v-cloak>
+  <div class="app-header">
+    <div>
+      <h1>JSON 数据比对工具 <span class="subtitle">纯前端 · 数据不上传 · 支持 10 万+ 对象</span></h1>
+    </div>
+    <div class="tips">粘贴 / 上传 / 拖拽 JSON &nbsp;&nbsp;→&nbsp;&nbsp; 指定主键 &nbsp;&nbsp;→&nbsp;&nbsp; 开始比较</div>
+  </div>
+
+  <div class="main-container">
+    <!-- 编辑器 -->
+    <el-row :gutter="12" class="editor-row">
+      <el-col :span="12">
+        <div class="editor-card">
+          <div class="editor-header">
+            <span class="editor-label">A JSON <span v-if="lenA>0" class="badge">{{ lenA }} 条</span></span>
+            <el-space :size="4">
+              <el-button size="small" @click="loadSample('A')">示例</el-button>
+              <el-button size="small" @click="pickFile('A')">上传</el-button>
+              <el-button size="small" @click="formatJson('A')">格式化</el-button>
+              <el-button size="small" @click="minifyJson('A')">压缩</el-button>
+              <el-button size="small" type="danger" plain @click="clearJson('A')">清空</el-button>
+            </el-space>
+          </div>
+          <div class="monaco-wrap" ref="wrapAEl">
+            <div class="monaco-editor-container" ref="editorAEl"></div>
+            <div class="drop-overlay">松开鼠标以加载 JSON 文件</div>
+          </div>
+          <div class="editor-footer">
+            <div class="path-row">
+              <el-input v-model="pathA" size="small" placeholder="JSONPath, 例如 $.data.list, 留空或 $ 表示根节点" class="path-input">
+                <template #prepend>路径 A</template>
+              </el-input>
+              <el-popover placement="bottom-end" :width="560" trigger="click"
+                          v-model:visible="popoverAOpen"
+                          @show="openCandidates('A')">
+                <template #reference>
+                  <el-button size="small" plain class="path-btn">候选</el-button>
+                </template>
+                <path-candidates
+                  :loading="candLoadingA"
+                  :candidates="candidatesA"
+                  @select="v => selectCandidate('A', v)"/>
+              </el-popover>
+              <el-button size="small" plain class="path-btn" @click="autoPath('A')">自动</el-button>
+            </div>
+          </div>
+        </div>
+      </el-col>
+      <el-col :span="12">
+        <div class="editor-card">
+          <div class="editor-header">
+            <span class="editor-label">B JSON <span v-if="lenB>0" class="badge">{{ lenB }} 条</span></span>
+            <el-space :size="4">
+              <el-button size="small" @click="loadSample('B')">示例</el-button>
+              <el-button size="small" @click="pickFile('B')">上传</el-button>
+              <el-button size="small" @click="formatJson('B')">格式化</el-button>
+              <el-button size="small" @click="minifyJson('B')">压缩</el-button>
+              <el-button size="small" type="danger" plain @click="clearJson('B')">清空</el-button>
+            </el-space>
+          </div>
+          <div class="monaco-wrap" ref="wrapBEl">
+            <div class="monaco-editor-container" ref="editorBEl"></div>
+            <div class="drop-overlay">松开鼠标以加载 JSON 文件</div>
+          </div>
+          <div class="editor-footer">
+            <div class="path-row">
+              <el-input v-model="pathB" size="small" placeholder="JSONPath, 例如 $.data.list, 留空或 $ 表示根节点" class="path-input">
+                <template #prepend>路径 B</template>
+              </el-input>
+              <el-popover placement="bottom-end" :width="560" trigger="click"
+                          v-model:visible="popoverBOpen"
+                          @show="openCandidates('B')">
+                <template #reference>
+                  <el-button size="small" plain class="path-btn">候选</el-button>
+                </template>
+                <path-candidates
+                  :loading="candLoadingB"
+                  :candidates="candidatesB"
+                  @select="v => selectCandidate('B', v)"/>
+              </el-popover>
+              <el-button size="small" plain class="path-btn" @click="autoPath('B')">自动</el-button>
+            </div>
+          </div>
+        </div>
+      </el-col>
+    </el-row>
+
+    <!-- 字段选择 -->
+    <el-card class="section-card" shadow="never">
+      <template #header>
+        <div class="card-header">
+          <span>
+            <b>比较字段（主键）</b>
+            <span style="color:var(--muted);font-size:12px;margin-left:6px">
+              已选 {{ selectedFieldsList.length }} / 共 {{ fields.length }}
+              <span v-if="selectedFieldsList.length">→ Key: <code>{{ selectedFieldsList.join('_') }}</code></span>
+            </span>
+          </span>
+          <el-space wrap>
+            <el-input v-model="fieldSearch" size="small" placeholder="搜索字段" style="width:180px" clearable/>
+            <el-button size="small" type="primary" plain @click="detectFieldsFromInputs">解析字段</el-button>
+            <el-button size="small" @click="selectAllFields(true)">全选</el-button>
+            <el-button size="small" @click="selectAllFields(false)">全不选</el-button>
+          </el-space>
+        </div>
+      </template>
+      <div v-if="fields.length === 0" class="empty-hint">
+        请先输入 A / B 两侧 JSON，点击「解析字段」自动识别可用字段。
+      </div>
+      <div v-else class="field-list">
+        <el-checkbox
+          v-for="f in filteredFields"
+          :key="f"
+          v-model="fieldChecked[f]">{{ f }}</el-checkbox>
+      </div>
+    </el-card>
+
+    <!-- 比较模式 + 按钮 -->
+    <el-card class="section-card" shadow="never">
+      <div class="mode-actions">
+        <div>
+          <span class="section-label">比较模式：</span>
+          <el-radio-group v-model="compareMode">
+            <el-radio value="full">完全一致</el-radio>
+            <el-radio value="key">主键一致（推荐）</el-radio>
+            <el-radio value="any">任意字段一致</el-radio>
+          </el-radio-group>
+          <span style="color:var(--muted);font-size:12px;margin-left:12px">{{ modeHint }}</span>
+        </div>
+        <el-space>
+          <el-button type="primary" @click="doCompare" :loading="comparing">开始比较</el-button>
+          <el-button @click="swap">交换 A/B</el-button>
+          <el-button type="danger" plain @click="clearAll">全部清空</el-button>
+        </el-space>
+      </div>
+    </el-card>
+
+    <!-- 统计 -->
+    <el-card v-if="result" class="section-card" shadow="never">
+      <div class="stats-grid">
+        <div class="stat-item"><div class="stat-label">A 数量</div><div class="stat-value">{{ result.stats.aCount }}</div></div>
+        <div class="stat-item"><div class="stat-label">B 数量</div><div class="stat-value">{{ result.stats.bCount }}</div></div>
+        <div class="stat-item stat-same"><div class="stat-label">相同</div><div class="stat-value">{{ result.same.length }}</div></div>
+        <div class="stat-item stat-a-only"><div class="stat-label">A 独有</div><div class="stat-value">{{ result.aOnly.length }}</div></div>
+        <div class="stat-item stat-b-only"><div class="stat-label">B 独有</div><div class="stat-value">{{ result.bOnly.length }}</div></div>
+        <div class="stat-item stat-diff"><div class="stat-label">字段差异（对）</div><div class="stat-value">{{ result.diff.length }}</div></div>
+        <div v-if="(result.stats.dupA + result.stats.dupB) > 0" class="stat-item stat-warn">
+          <div class="stat-label">重复主键 A / B</div>
+          <div class="stat-value">{{ result.stats.dupA }} / {{ result.stats.dupB }}</div>
+        </div>
+        <div class="stat-item stat-duration"><div class="stat-label">耗时</div><div class="stat-value">{{ result.stats.duration }} ms</div></div>
+      </div>
+    </el-card>
+
+    <!-- 结果 -->
+    <el-card v-if="result" class="section-card" shadow="never">
+      <el-tabs v-model="activeTab" type="border-card">
+        <el-tab-pane name="same" :label="`相同 (${result.same.length})`">
+          <result-grid
+            tab="same"
+            :rows="result.same"
+            :fields="displayFields"
+            :key-fields="result.keyFields"
+            v-model:search="tabSearch.same"
+            @export="exportTab"/>
+        </el-tab-pane>
+        <el-tab-pane name="aOnly" :label="`A 独有 (${result.aOnly.length})`">
+          <result-grid
+            tab="aOnly"
+            :rows="result.aOnly"
+            :fields="displayFields"
+            :key-fields="result.keyFields"
+            v-model:search="tabSearch.aOnly"
+            @export="exportTab"/>
+        </el-tab-pane>
+        <el-tab-pane name="bOnly" :label="`B 独有 (${result.bOnly.length})`">
+          <result-grid
+            tab="bOnly"
+            :rows="result.bOnly"
+            :fields="displayFields"
+            :key-fields="result.keyFields"
+            v-model:search="tabSearch.bOnly"
+            @export="exportTab"/>
+        </el-tab-pane>
+        <el-tab-pane name="diff" :label="`字段差异 (${diffFlat.length})`">
+          <result-grid
+            tab="diff"
+            :rows="diffFlat"
+            :fields="['key','field','valueA','valueB']"
+            :key-fields="result.keyFields"
+            is-diff
+            v-model:search="tabSearch.diff"
+            @export="exportTab"/>
+        </el-tab-pane>
+      </el-tabs>
+    </el-card>
+  </div>
+
+  <input ref="fileInput" type="file" accept=".json,.txt" style="display:none" @change="onFilePicked">
+
+  <div v-if="loadingText" class="loading-mask">
+    <div class="spinner"></div>
+    <div>{{ loadingText }}</div>
+    <div v-if="loadingSubText" class="sub-text">{{ loadingSubText }}</div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/vue@3.4.38/dist/vue.global.prod.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/element-plus@2.7.6/dist/index.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.min.js"></script>
+
+<script>
+/* =============== JSON 工具函数 =============== */
+
+// 简单 JSONPath: $ / $.a.b / $.a.list[0]
+function extractByPath(obj, path){
+  const p = (path || "").trim();
+  if(!p || p === "$") return obj;
+  const norm = p.replace(/^\$\.?/, "").trim();
+  if(!norm) return obj;
+  const parts = norm.replace(/\[(\d+)\]/g, ".$1").split(".").filter(Boolean);
+  let cur = obj;
+  for(const part of parts){
+    if(cur == null) return null;
+    cur = cur[part];
+  }
+  return cur;
+}
+
+// 自动寻找第一个数组节点, 深度优先, 返回 JSONPath 字符串
+function findFirstArray(obj, prefix){
+  prefix = prefix || "$";
+  if(Array.isArray(obj)) return prefix;
+  if(obj && typeof obj === "object"){
+    for(const k of Object.keys(obj)){
+      if(Array.isArray(obj[k])) return prefix + "." + k;
+    }
+    for(const k of Object.keys(obj)){
+      const inner = findFirstArray(obj[k], prefix + "." + k);
+      if(inner) return inner;
+    }
+  }
+  return null;
+}
+
+// 收集数组中所有对象的字段名
+function collectFields(arr){
+  const set = new Set();
+  const n = arr.length;
+  for(let i = 0; i < n; i++){
+    const it = arr[i];
+    if(it && typeof it === "object" && !Array.isArray(it)){
+      const ks = Object.keys(it);
+      for(let j = 0; j < ks.length; j++) set.add(ks[j]);
+    }
+  }
+  return Array.from(set);
+}
+
+// 扫描 JSON 树, 收集所有"对象数组"节点作为候选
+// 只沿对象向下走, 不进入数组元素, 避免生成 $.list[0].sub 这类脆弱路径
+function scanArrayCandidates(root){
+  const results = [];
+  const stack = [{ node: root, path: "$", depth: 0 }];
+  const MAX_DEPTH = 20;
+  while(stack.length){
+    const cur = stack.pop();
+    const node = cur.node;
+    if(node == null) continue;
+    if(cur.depth > MAX_DEPTH) continue;
+    if(Array.isArray(node)){
+      if(node.length > 0){
+        const first = node[0];
+        if(first && typeof first === "object" && !Array.isArray(first)){
+          const fields = collectFields(node.length > 500 ? node.slice(0, 500) : node);
+          results.push({ path: cur.path, length: node.length, fields: fields, depth: cur.depth });
+        }
+      }
+      continue;
+    }
+    if(typeof node === "object"){
+      const keys = Object.keys(node);
+      for(let i = 0; i < keys.length; i++){
+        const k = keys[i];
+        // 使用点分记法, 不做 [] 括号编码
+        stack.push({ node: node[k], path: cur.path + "." + k, depth: cur.depth + 1 });
+      }
+    }
+  }
+  return results;
+}
+
+const CAND_KEY_HINTS = ["list","items","data","rows","records","results","entries","collection","array","content","payload"];
+
+// 给候选打分, otherFields 为对侧已识别到的字段列表, 命中越多分越高
+function scoreCandidates(cands, otherFields){
+  const otherSet = otherFields && otherFields.length ? new Set(otherFields) : null;
+  for(const c of cands){
+    let score = 0;
+    // 元素数量 (对数增长, 防止一个几百万的数组把权重压死)
+    score += Math.log10(c.length + 1) * 30;
+    // 关键字命中
+    const lower = c.path.toLowerCase();
+    for(const h of CAND_KEY_HINTS){
+      if(lower.indexOf("." + h) >= 0 || lower === "$." + h || lower.endsWith("." + h)){
+        score += 25; break;
+      }
+    }
+    // 深度惩罚
+    score -= c.depth * 2;
+    // 与对侧字段交集
+    let intersect = 0;
+    if(otherSet){
+      for(const f of c.fields) if(otherSet.has(f)) intersect++;
+      score += intersect * 18;
+    }
+    c.intersect = intersect;
+    c.fieldCount = c.fields.length;
+    c.score = score;
+    c.preview = c.fields.slice(0, 6).join(", ") + (c.fields.length > 6 ? ", ..." : "");
+  }
+  cands.sort(function(a, b){ return b.score - a.score; });
+  return cands;
+}
+
+// 组合主键
+function buildKey(item, fields){
+  const parts = new Array(fields.length);
+  for(let i = 0; i < fields.length; i++){
+    const v = item[fields[i]];
+    if(v === undefined || v === null) parts[i] = "\x01N\x01";
+    else if(typeof v === "object") parts[i] = JSON.stringify(v);
+    else parts[i] = String(v);
+  }
+  return parts.join("\x1f");
+}
+
+// 深比较, 忽略对象键顺序
+function deepEqual(a, b){
+  if(a === b) return true;
+  if(a == null || b == null) return a === b;
+  const ta = typeof a, tb = typeof b;
+  if(ta !== tb) return false;
+  if(ta !== "object") return a === b;
+  const aIsArr = Array.isArray(a), bIsArr = Array.isArray(b);
+  if(aIsArr !== bIsArr) return false;
+  if(aIsArr){
+    if(a.length !== b.length) return false;
+    for(let i = 0; i < a.length; i++) if(!deepEqual(a[i], b[i])) return false;
+    return true;
+  }
+  const ka = Object.keys(a);
+  if(ka.length !== Object.keys(b).length) return false;
+  for(const k of ka) if(!deepEqual(a[k], b[k])) return false;
+  return true;
+}
+
+// 核心比对
+function compareArrays(arrA, arrB, keyFields, mode){
+  const start = performance.now();
+  const fieldsA = collectFields(arrA);
+  const fieldsB = collectFields(arrB);
+  const allFields = Array.from(new Set([].concat(fieldsA, fieldsB)));
+
+  const same = [], diff = [], aOnly = [], bOnly = [];
+  let dupA = 0, dupB = 0;
+
+  if(mode === "any"){
+    // 任意字段一致: 对每个选中字段建 B 侧倒排索引, A 中任一字段值命中即视为相同
+    const idx = {};
+    for(const f of keyFields) idx[f] = new Map();
+    for(let i = 0; i < arrB.length; i++){
+      const it = arrB[i];
+      if(!it || typeof it !== "object") continue;
+      for(const f of keyFields){
+        const v = it[f];
+        if(v === undefined || v === null || v === "") continue;
+        const key = typeof v === "object" ? JSON.stringify(v) : String(v);
+        let bucket = idx[f].get(key);
+        if(!bucket){ bucket = []; idx[f].set(key, bucket); }
+        bucket.push(i);
+      }
+    }
+    const matchedB = new Set();
+    for(const itA of arrA){
+      if(!itA || typeof itA !== "object"){ aOnly.push({ key: "(非对象)", item: itA }); continue; }
+      let bIdx = -1, hitField = "";
+      for(const f of keyFields){
+        const v = itA[f];
+        if(v === undefined || v === null || v === "") continue;
+        const key = typeof v === "object" ? JSON.stringify(v) : String(v);
+        const bucket = idx[f].get(key);
+        if(bucket && bucket.length){
+          for(const cand of bucket){
+            if(!matchedB.has(cand)){ bIdx = cand; hitField = f; break; }
+          }
+          if(bIdx < 0) bIdx = bucket[0];
+          if(bIdx >= 0) break;
+        }
+      }
+      const dispKey = buildKey(itA, keyFields);
+      if(bIdx >= 0){
+        matchedB.add(bIdx);
+        same.push({ key: dispKey, a: itA, b: arrB[bIdx], hitField: hitField });
+      }else{
+        aOnly.push({ key: dispKey, item: itA });
+      }
+    }
+    for(let i = 0; i < arrB.length; i++){
+      if(!matchedB.has(i)){
+        const it = arrB[i];
+        bOnly.push({ key: buildKey(it || {}, keyFields), item: it });
+      }
+    }
+    return {
+      same: same, diff: diff, aOnly: aOnly, bOnly: bOnly,
+      allFields: allFields, keyFields: keyFields, mode: mode,
+      stats: {
+        aCount: arrA.length, bCount: arrB.length,
+        dupA: 0, dupB: 0,
+        duration: Math.round(performance.now() - start)
+      }
+    };
+  }
+
+  // full 模式比较全部字段, key 模式仅比较非主键字段
+  const excludeSet = mode === "key" ? new Set(keyFields) : null;
+  const compareFields = excludeSet ? allFields.filter(function(f){ return !excludeSet.has(f); }) : allFields;
+
+  const mapA = new Map();
+  const mapB = new Map();
+  for(const it of arrA){
+    if(!it || typeof it !== "object") continue;
+    const k = buildKey(it, keyFields);
+    if(mapA.has(k)) dupA++;
+    else mapA.set(k, it);
+  }
+  for(const it of arrB){
+    if(!it || typeof it !== "object") continue;
+    const k = buildKey(it, keyFields);
+    if(mapB.has(k)) dupB++;
+    else mapB.set(k, it);
+  }
+
+  for(const entry of mapA){
+    const k = entry[0], itA = entry[1];
+    const itB = mapB.get(k);
+    if(itB !== undefined){
+      const df = [];
+      for(const f of compareFields){
+        if(!deepEqual(itA[f], itB[f])) df.push(f);
+      }
+      if(df.length === 0) same.push({ key: k, a: itA, b: itB });
+      else diff.push({ key: k, a: itA, b: itB, diffFields: df });
+    }else{
+      aOnly.push({ key: k, item: itA });
+    }
+  }
+  for(const entry of mapB){
+    const k = entry[0], itB = entry[1];
+    if(!mapA.has(k)) bOnly.push({ key: k, item: itB });
+  }
+
+  return {
+    same: same, diff: diff, aOnly: aOnly, bOnly: bOnly,
+    allFields: allFields, keyFields: keyFields, mode: mode,
+    stats: {
+      aCount: arrA.length, bCount: arrB.length,
+      dupA: dupA, dupB: dupB,
+      duration: Math.round(performance.now() - start)
+    }
+  };
+}
+
+/* =============== Monaco Editor 加载 =============== */
+
+// file:// 协议下无法跨源加载 worker, 使用空 data URL 绕过, 关闭 JSON 校验
+window.MonacoEnvironment = {
+  getWorkerUrl: function(){ return "data:text/javascript;charset=utf-8,"; }
+};
+const monacoReady = new Promise(function(resolve, reject){
+  try{
+    require.config({ paths: { vs: "https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs" }});
+    require(["vs/editor/editor.main"], function(){
+      try{
+        monaco.languages.json.jsonDefaults.setDiagnosticsOptions({ validate: false, allowComments: true });
+      }catch(_){}
+      resolve();
+    });
+  }catch(e){ reject(e); }
+});
+
+/* =============== Vue 应用 =============== */
+const { createApp, ref, reactive, computed, watch, onMounted, nextTick } = Vue;
+
+// 结果表格子组件
+const ResultGrid = {
+  name: "ResultGrid",
+  props: {
+    tab: String,
+    rows: { type: Array, default: function(){ return []; }},
+    fields: { type: Array, default: function(){ return []; }},
+    keyFields: { type: Array, default: function(){ return []; }},
+    isDiff: { type: Boolean, default: false },
+    search: { type: String, default: "" }
+  },
+  emits: ["update:search", "export"],
+  setup(props, ctx){
+    const page = ref(1);
+    const pageSize = ref(100);
+    const searchLocal = computed({
+      get(){ return props.search || ""; },
+      set(v){ ctx.emit("update:search", v); }
+    });
+
+    function formatVal(v){
+      if(v === undefined) return "";
+      if(v === null) return "null";
+      if(typeof v === "object") return JSON.stringify(v);
+      return v;
+    }
+
+    const columns = computed(function(){
+      if(props.isDiff){
+        return [
+          { prop: "key", label: "主键", width: 280, fixed: "left", cls: "key-cell" },
+          { prop: "field", label: "字段", width: 180 },
+          { prop: "valueA", label: "A 值", cls: "diff-value-a" },
+          { prop: "valueB", label: "B 值", cls: "diff-value-b" }
+        ];
+      }
+      const cols = [{ prop: "_key", label: "主键", width: 280, fixed: "left", cls: "key-cell" }];
+      const keySet = new Set(props.keyFields || []);
+      const orderedFields = [].concat(
+        (props.fields || []).filter(function(f){ return keySet.has(f); }),
+        (props.fields || []).filter(function(f){ return !keySet.has(f); })
+      );
+      for(const f of orderedFields){
+        const isKey = keySet.has(f);
+        cols.push({ prop: f, label: (isKey ? "★ " : "") + f, minWidth: 120, cls: isKey ? "key-cell" : "" });
+      }
+      return cols;
+    });
+
+    const flatRows = computed(function(){
+      if(props.isDiff){
+        return props.rows.map(function(r){
+          return { key: r.key, field: r.field, valueA: formatVal(r.valueA), valueB: formatVal(r.valueB) };
+        });
+      }
+      return props.rows.map(function(r){
+        const src = r.item || r.a || {};
+        const obj = { _key: r.key };
+        for(const f of props.fields) obj[f] = formatVal(src[f]);
+        return obj;
+      });
+    });
+
+    const filteredRows = computed(function(){
+      const q = (searchLocal.value || "").toLowerCase();
+      if(!q) return flatRows.value;
+      return flatRows.value.filter(function(row){
+        for(const k in row){
+          const v = row[k];
+          if(v != null && String(v).toLowerCase().indexOf(q) >= 0) return true;
+        }
+        return false;
+      });
+    });
+
+    const pagedRows = computed(function(){
+      const start = (page.value - 1) * pageSize.value;
+      return filteredRows.value.slice(start, start + pageSize.value);
+    });
+
+    watch(function(){ return props.rows; }, function(){ page.value = 1; });
+    watch(searchLocal, function(){ page.value = 1; });
+
+    return {
+      page: page, pageSize: pageSize, searchLocal: searchLocal,
+      columns: columns, filteredRows: filteredRows, pagedRows: pagedRows
+    };
+  },
+  template: `
+    <div>
+      <div class="tab-toolbar">
+        <el-input v-model="searchLocal" placeholder="搜索关键字, 命中任意列即显示" size="small" style="width:320px" clearable/>
+        <el-space wrap>
+          <span style="color:var(--muted);font-size:12px">共 {{ filteredRows.length }} 条</span>
+          <el-button size="small" @click="$emit('export',{tab,format:'json'})">导出 JSON</el-button>
+          <el-button size="small" @click="$emit('export',{tab,format:'csv'})">导出 CSV</el-button>
+          <el-button size="small" @click="$emit('export',{tab,format:'xlsx'})">导出 Excel</el-button>
+        </el-space>
+      </div>
+      <el-table :data="pagedRows" size="small" border stripe :max-height="520" empty-text="暂无数据" style="width:100%">
+        <el-table-column
+          v-for="col in columns"
+          :key="col.prop"
+          :prop="col.prop"
+          :label="col.label"
+          :width="col.width"
+          :min-width="col.minWidth"
+          :fixed="col.fixed"
+          :class-name="col.cls"
+          show-overflow-tooltip
+          sortable/>
+      </el-table>
+      <div v-if="filteredRows.length > pageSize" style="margin-top:10px;text-align:right">
+        <el-pagination
+          background
+          layout="total, sizes, prev, pager, next, jumper"
+          :total="filteredRows.length"
+          :page-sizes="[50,100,200,500,1000]"
+          v-model:page-size="pageSize"
+          v-model:current-page="page"/>
+      </div>
+    </div>
+  `
+};
+
+// 路径候选面板
+const PathCandidates = {
+  name: "PathCandidates",
+  props: {
+    loading: { type: Boolean, default: false },
+    candidates: { type: Array, default: function(){ return []; }}
+  },
+  emits: ["select"],
+  template: `
+    <div class="cand-panel">
+      <div v-if="loading" class="cand-loading">
+        <span style="display:inline-block;width:16px;height:16px;border:2px solid #ecf5ff;border-top-color:#409eff;border-radius:50%;animation:jc-spin .8s linear infinite;vertical-align:middle;margin-right:8px"></span>
+        扫描中...
+      </div>
+      <div v-else-if="!candidates.length" class="cand-empty">
+        未识别到对象数组<br><span style="font-size:12px">请先输入 JSON 数据</span>
+      </div>
+      <div v-else>
+        <div
+          v-for="(c, i) in candidates"
+          :key="c.path"
+          class="cand-item"
+          :class="{ 'is-best': i===0 }"
+          @click="$emit('select', c.path)">
+          <div class="cand-path">
+            <span v-if="i===0" class="cand-tag-best">推荐</span>
+            <span>{{ c.path }}</span>
+          </div>
+          <div class="cand-meta">
+            <span class="cand-count">{{ c.length }} 条</span>
+            <span>{{ c.fieldCount }} 个字段</span>
+            <span v-if="c.intersect > 0" style="color:#67c23a">与对侧对齐 {{ c.intersect }}</span>
+            <span class="cand-fields">{{ c.preview }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  `
+};
+
+const App = {
+  components: { ResultGrid: ResultGrid, PathCandidates: PathCandidates },
+  setup(){
+    // refs
+    const editorAEl = ref(null);
+    const editorBEl = ref(null);
+    const wrapAEl = ref(null);
+    const wrapBEl = ref(null);
+    const fileInput = ref(null);
+    const pickTarget = ref("A");
+
+    // Monaco 实例, 非响应式
+    let editorA = null, editorB = null;
+
+    // 数据
+    const pathA = ref("$");
+    const pathB = ref("$");
+    const lenA = ref(0);
+    const lenB = ref(0);
+
+    const fields = ref([]);
+    const fieldChecked = reactive({});
+    const fieldSearch = ref("");
+    const compareMode = ref("key");
+
+    const result = ref(null);
+    const comparing = ref(false);
+    const loadingText = ref("");
+    const loadingSubText = ref("");
+    const activeTab = ref("same");
+    const tabSearch = reactive({ same: "", aOnly: "", bOnly: "", diff: "" });
+
+    // 路径候选
+    const candidatesA = ref([]);
+    const candidatesB = ref([]);
+    const candLoadingA = ref(false);
+    const candLoadingB = ref(false);
+    const popoverAOpen = ref(false);
+    const popoverBOpen = ref(false);
+
+    // computed
+    const selectedFieldsList = computed(function(){
+      return fields.value.filter(function(f){ return fieldChecked[f]; });
+    });
+    const filteredFields = computed(function(){
+      const q = fieldSearch.value.toLowerCase();
+      if(!q) return fields.value;
+      return fields.value.filter(function(f){ return f.toLowerCase().indexOf(q) >= 0; });
+    });
+    const displayFields = computed(function(){
+      if(!result.value) return [];
+      const kf = result.value.keyFields || [];
+      const rest = (result.value.allFields || []).filter(function(f){ return kf.indexOf(f) < 0; });
+      return [].concat(kf, rest);
+    });
+    const diffFlat = computed(function(){
+      if(!result.value) return [];
+      const out = [];
+      for(const r of result.value.diff){
+        for(const f of r.diffFields){
+          out.push({ key: r.key, field: f, valueA: r.a[f], valueB: r.b[f] });
+        }
+      }
+      return out;
+    });
+    const modeHint = computed(function(){
+      const m = compareMode.value;
+      if(m === "full") return "所有字段都相等才判为「相同」, 主键匹配但其它字段不同 → 字段差异";
+      if(m === "key") return "主键相等即视为「相同」, 主键匹配但其它字段不同额外列入「字段差异」";
+      return "只要选中字段中有任一值命中即视为「相同」, 适用于弱主键场景";
+    });
+
+    /* --------- Monaco 初始化 --------- */
+    onMounted(async function(){
+      try{
+        loadingText.value = "加载编辑器...";
+        await monacoReady;
+        loadingText.value = "";
+        editorA = monaco.editor.create(editorAEl.value, {
+          value: "", language: "json", theme: "vs",
+          automaticLayout: true, minimap: { enabled: false }, wordWrap: "on",
+          tabSize: 2, fontSize: 13, scrollBeyondLastLine: false
+        });
+        editorB = monaco.editor.create(editorBEl.value, {
+          value: "", language: "json", theme: "vs",
+          automaticLayout: true, minimap: { enabled: false }, wordWrap: "on",
+          tabSize: 2, fontSize: 13, scrollBeyondLastLine: false
+        });
+
+        // 双侧拖拽 & 失焦解析
+        bindDropZone(wrapAEl.value, "A");
+        bindDropZone(wrapBEl.value, "B");
+        editorA.onDidBlurEditorText(function(){ silentDetect(); });
+        editorB.onDidBlurEditorText(function(){ silentDetect(); });
+      }catch(e){
+        loadingText.value = "";
+        ElementPlus.ElMessage.error("编辑器加载失败: " + (e && e.message ? e.message : e) + " (请检查网络或改用 http:// 打开)");
+      }
+    });
+
+    function bindDropZone(el, which){
+      if(!el) return;
+      const setDragging = function(on){ el.classList.toggle("dragging", on); };
+      el.addEventListener("dragenter", function(e){ e.preventDefault(); setDragging(true); }, true);
+      el.addEventListener("dragover",  function(e){ e.preventDefault(); e.dataTransfer.dropEffect = "copy"; }, true);
+      el.addEventListener("dragleave", function(e){
+        if(!el.contains(e.relatedTarget)) setDragging(false);
+      }, true);
+      el.addEventListener("drop", function(e){
+        e.preventDefault(); e.stopPropagation();
+        setDragging(false);
+        const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+        if(f) readFileInto(f, which);
+      }, true);
+    }
+
+    /* --------- 编辑器读写 --------- */
+    function getText(which){ const ed = which === "A" ? editorA : editorB; return ed ? ed.getValue() : ""; }
+    function setText(which, txt){ const ed = which === "A" ? editorA : editorB; if(ed) ed.setValue(txt || ""); }
+
+    /* --------- 解析 & 校验 --------- */
+    function parseSide(which){
+      const text = getText(which);
+      if(!text.trim()) throw new Error(which + " JSON 为空");
+      let obj;
+      try{ obj = JSON.parse(text); }
+      catch(e){
+        const line = extractLineFromError(text, e.message);
+        throw new Error(which + " JSON 格式错误" + (line ? "（第 " + line + " 行）" : "") + ": " + e.message);
+      }
+      const path = which === "A" ? pathA.value : pathB.value;
+      let arr = extractByPath(obj, path);
+      if(!Array.isArray(arr)){
+        const guess = findFirstArray(obj);
+        if(guess) throw new Error(which + " 路径「" + (path || "$") + "」未指向数组, 建议尝试路径: " + guess);
+        throw new Error(which + " 路径「" + (path || "$") + "」未指向数组");
+      }
+      return arr;
+    }
+
+    function extractLineFromError(text, msg){
+      // 常见形如 "at position 128"
+      const m = /position (\d+)/i.exec(msg || "");
+      if(!m) return null;
+      const pos = parseInt(m[1], 10);
+      const before = text.slice(0, pos);
+      return before.split("\n").length;
+    }
+
+    /* --------- 字段识别 --------- */
+    async function detectFieldsFromInputs(){
+      const textA = getText("A"), textB = getText("B");
+      const totalSize = textA.length + textB.length;
+      const run = function(){
+        const arrA = textA.trim() ? parseSide("A") : [];
+        const arrB = textB.trim() ? parseSide("B") : [];
+        lenA.value = arrA.length; lenB.value = arrB.length;
+        const fa = collectFields(arrA);
+        const fb = collectFields(arrB);
+        const merged = Array.from(new Set([].concat(fa, fb)));
+        fields.value = merged;
+        const kept = {};
+        for(const f of merged) kept[f] = fieldChecked[f] == null ? false : fieldChecked[f];
+        Object.keys(fieldChecked).forEach(function(k){ delete fieldChecked[k]; });
+        Object.assign(fieldChecked, kept);
+        if(!Object.values(kept).some(Boolean)){
+          const guess = ["id","code","key","market","date","tradeDate","name","symbol"];
+          for(const g of guess) if(g in kept) fieldChecked[g] = true;
+        }
+        ElementPlus.ElMessage.success("识别到 " + merged.length + " 个字段（A:" + arrA.length + " 条, B:" + arrB.length + " 条）");
+      };
+      try{
+        if(totalSize > HEAVY_THRESHOLD) await withLoading("解析字段中...", "共 " + Math.round(totalSize/1024) + " KB", run);
+        else run();
+      }catch(e){
+        ElementPlus.ElMessage.error(e.message);
+      }
+    }
+
+    // 编辑器失焦时静默尝试更新字段列表 & 数量
+    let silentTimer = null;
+    function silentDetect(){
+      clearTimeout(silentTimer);
+      silentTimer = setTimeout(function(){
+        try{
+          const arrA = getText("A").trim() ? parseSide("A") : [];
+          const arrB = getText("B").trim() ? parseSide("B") : [];
+          lenA.value = arrA.length; lenB.value = arrB.length;
+          const merged = Array.from(new Set([].concat(collectFields(arrA), collectFields(arrB))));
+          if(merged.length){
+            fields.value = merged;
+            const kept = {};
+            for(const f of merged) kept[f] = fieldChecked[f] == null ? false : fieldChecked[f];
+            Object.keys(fieldChecked).forEach(function(k){ delete fieldChecked[k]; });
+            Object.assign(fieldChecked, kept);
+            if(!Object.values(kept).some(Boolean)){
+              const guess = ["id","code","key","market","date","tradeDate","name","symbol"];
+              for(const g of guess) if(g in kept) fieldChecked[g] = true;
+            }
+          }
+        }catch(_){ /* 静默失败 */ }
+      }, 300);
+    }
+
+    function selectAllFields(v){
+      for(const f of fields.value) fieldChecked[f] = v;
+    }
+
+    /* --------- 自动路径 --------- */
+    function autoPath(which){
+      const text = getText(which);
+      if(!text.trim()){ ElementPlus.ElMessage.warning(which + " JSON 为空"); return; }
+      try{
+        const obj = JSON.parse(text);
+        const guess = findFirstArray(obj);
+        if(!guess){ ElementPlus.ElMessage.warning("未找到数组节点"); return; }
+        if(which === "A") pathA.value = guess; else pathB.value = guess;
+        ElementPlus.ElMessage.success("已设置路径: " + guess);
+      }catch(e){
+        ElementPlus.ElMessage.error(which + " JSON 格式错误: " + e.message);
+      }
+    }
+
+    /* --------- 通用 loading 助手 --------- */
+    // 大文本操作前把遮罩打起来, 给浏览器一帧时间渲染再执行, 避免主线程卡死时看不到 loading
+    async function withLoading(text, sub, work){
+      if(typeof sub === "function"){ work = sub; sub = ""; }
+      const wasEmpty = !loadingText.value;
+      if(wasEmpty){ loadingText.value = text; loadingSubText.value = sub || ""; }
+      await nextTick();
+      await new Promise(function(r){ setTimeout(r, 16); });
+      try{ return await work(); }
+      finally{ if(wasEmpty){ loadingText.value = ""; loadingSubText.value = ""; } }
+    }
+    // 内容较大时才显示 loading (小于 200KB 直接同步跑, 避免闪烁)
+    const HEAVY_THRESHOLD = 200 * 1024;
+
+    /* --------- 路径候选 --------- */
+    async function openCandidates(which){
+      const text = getText(which);
+      if(!text.trim()){
+        if(which === "A"){ candidatesA.value = []; }
+        else{ candidatesB.value = []; }
+        return;
+      }
+      const setLoading = function(v){ if(which === "A") candLoadingA.value = v; else candLoadingB.value = v; };
+      setLoading(true);
+      // 给下拉一帧时间渲染 loading 骨架
+      await nextTick();
+      await new Promise(function(r){ setTimeout(r, 16); });
+      try{
+        const heavy = text.length > HEAVY_THRESHOLD;
+        const run = function(){
+          const obj = JSON.parse(text);
+          const cands = scanArrayCandidates(obj);
+          if(cands.length === 0){
+            if(which === "A") candidatesA.value = [];
+            else candidatesB.value = [];
+            return;
+          }
+          // 收集对侧字段用于交集排序
+          let otherFields = [];
+          try{
+            const otherText = getText(which === "A" ? "B" : "A");
+            if(otherText.trim()){
+              const otherObj = JSON.parse(otherText);
+              const otherPath = which === "A" ? pathB.value : pathA.value;
+              const otherArr = extractByPath(otherObj, otherPath);
+              if(Array.isArray(otherArr)) otherFields = collectFields(otherArr);
+            }
+          }catch(_){ /* 对侧解析失败不阻塞 */ }
+          const scored = scoreCandidates(cands, otherFields);
+          if(which === "A") candidatesA.value = scored;
+          else candidatesB.value = scored;
+        };
+        if(heavy){
+          await withLoading("扫描候选路径...", "文件较大, 稍等 " + Math.round(text.length/1024) + " KB", run);
+        }else{
+          run();
+        }
+      }catch(e){
+        if(which === "A") candidatesA.value = [];
+        else candidatesB.value = [];
+        ElementPlus.ElMessage.error(which + " JSON 格式错误: " + e.message);
+      }finally{
+        setLoading(false);
+      }
+    }
+
+    function selectCandidate(which, path){
+      if(which === "A"){ pathA.value = path; popoverAOpen.value = false; }
+      else{ pathB.value = path; popoverBOpen.value = false; }
+      ElementPlus.ElMessage.success("已选择路径: " + path);
+      // 选择后顺便刷新字段列表, 让用户可以直接勾选主键
+      silentDetect();
+    }
+
+    /* --------- 比较 --------- */
+    async function doCompare(){
+      const kf = selectedFieldsList.value;
+      if(kf.length === 0){
+        ElementPlus.ElMessage.warning("请先勾选至少一个字段作为主键");
+        return;
+      }
+      try{
+        comparing.value = true;
+        loadingText.value = "解析 JSON...";
+        loadingSubText.value = "";
+        await nextTick();
+        await new Promise(function(r){ setTimeout(r, 20); });
+        const arrA = parseSide("A");
+        const arrB = parseSide("B");
+        lenA.value = arrA.length; lenB.value = arrB.length;
+        loadingText.value = "比较中...";
+        loadingSubText.value = "A: " + arrA.length.toLocaleString() + " 条  ·  B: " + arrB.length.toLocaleString() + " 条";
+        await nextTick();
+        await new Promise(function(r){ setTimeout(r, 16); });
+        const res = compareArrays(arrA, arrB, kf, compareMode.value);
+        loadingText.value = "渲染结果...";
+        loadingSubText.value = "";
+        await nextTick();
+        await new Promise(function(r){ setTimeout(r, 16); });
+        result.value = res;
+        activeTab.value = "same";
+        ElementPlus.ElMessage.success("比较完成: 相同 " + res.same.length + " / A独有 " + res.aOnly.length + " / B独有 " + res.bOnly.length + " / 差异 " + res.diff.length + " (耗时 " + res.stats.duration + "ms)");
+      }catch(e){
+        ElementPlus.ElMessage.error(e.message);
+      }finally{
+        comparing.value = false;
+        loadingText.value = "";
+        loadingSubText.value = "";
+      }
+    }
+
+    /* --------- 编辑器操作 --------- */
+    function swap(){
+      const a = getText("A"); const b = getText("B");
+      setText("A", b); setText("B", a);
+      const pa = pathA.value; pathA.value = pathB.value; pathB.value = pa;
+      const la = lenA.value; lenA.value = lenB.value; lenB.value = la;
+    }
+    async function formatJson(which){
+      const text = getText(which); if(!text.trim()) return;
+      const run = function(){
+        try{ setText(which, JSON.stringify(JSON.parse(text), null, 2)); }
+        catch(e){ ElementPlus.ElMessage.error(which + " JSON 格式错误: " + e.message); }
+      };
+      if(text.length > HEAVY_THRESHOLD) await withLoading("格式化 " + which + " JSON...", Math.round(text.length/1024) + " KB", run);
+      else run();
+    }
+    async function minifyJson(which){
+      const text = getText(which); if(!text.trim()) return;
+      const run = function(){
+        try{ setText(which, JSON.stringify(JSON.parse(text))); }
+        catch(e){ ElementPlus.ElMessage.error(which + " JSON 格式错误: " + e.message); }
+      };
+      if(text.length > HEAVY_THRESHOLD) await withLoading("压缩 " + which + " JSON...", Math.round(text.length/1024) + " KB", run);
+      else run();
+    }
+    function clearJson(which){
+      setText(which, "");
+      if(which === "A") lenA.value = 0; else lenB.value = 0;
+    }
+    function clearAll(){
+      setText("A", ""); setText("B", "");
+      lenA.value = 0; lenB.value = 0;
+      pathA.value = "$"; pathB.value = "$";
+      fields.value = [];
+      Object.keys(fieldChecked).forEach(function(k){ delete fieldChecked[k]; });
+      result.value = null;
+    }
+
+    /* --------- 文件读取 --------- */
+    function pickFile(which){ pickTarget.value = which; fileInput.value.click(); }
+    function onFilePicked(e){
+      const f = e.target.files && e.target.files[0]; if(!f) return;
+      readFileInto(f, pickTarget.value);
+      e.target.value = "";
+    }
+    function readFileInto(f, which){
+      const heavy = f.size > HEAVY_THRESHOLD;
+      if(heavy){
+        loadingText.value = "读取文件 " + f.name + "...";
+        loadingSubText.value = Math.round(f.size/1024) + " KB";
+      }
+      const reader = new FileReader();
+      reader.onload = function(){
+        setText(which, String(reader.result || ""));
+        if(heavy){ loadingText.value = ""; loadingSubText.value = ""; }
+        silentDetect();
+      };
+      reader.onerror = function(){
+        if(heavy){ loadingText.value = ""; loadingSubText.value = ""; }
+        ElementPlus.ElMessage.error("文件读取失败");
+      };
+      reader.readAsText(f, "utf-8");
+    }
+
+    /* --------- 示例数据 --------- */
+    function loadSample(which){
+      const sampleA = [
+        { code: "600519", market: "sh", date: "2024-01-02", name: "贵州茅台", price: 1685.00, amount: 12000, turnover: 20220000 },
+        { code: "000001", market: "sz", date: "2024-01-02", name: "平安银行", price: 12.35, amount: 250000, turnover: 3087500 },
+        { code: "300750", market: "sz", date: "2024-01-02", name: "宁德时代", price: 168.00, amount: 90000, turnover: 15120000 },
+        { code: "601318", market: "sh", date: "2024-01-02", name: "中国平安", price: 41.90, amount: 300000, turnover: 12570000 },
+        { code: "000858", market: "sz", date: "2024-01-02", name: "五粮液", price: 141.50, amount: 60000, turnover: 8490000 }
+      ];
+      const sampleB = [
+        { code: "600519", market: "sh", date: "2024-01-02", name: "贵州茅台", price: 1690.00, amount: 12000, turnover: 20280000 },
+        { code: "000001", market: "sz", date: "2024-01-02", name: "平安银行", price: 12.35, amount: 250000, turnover: 3087500 },
+        { code: "601318", market: "sh", date: "2024-01-02", name: "中国平安", price: 41.90, amount: 300000, turnover: 12570000 },
+        { code: "000858", market: "sz", date: "2024-01-02", name: "五粮液", price: 141.30, amount: 60000, turnover: 8478000 },
+        { code: "601899", market: "sh", date: "2024-01-02", name: "紫金矿业", price: 12.60, amount: 500000, turnover: 6300000 }
+      ];
+      const wrap = function(list){ return JSON.stringify({ data: { list: list } }, null, 2); };
+      if(which === "A"){ setText("A", wrap(sampleA)); pathA.value = "$.data.list"; }
+      else{ setText("B", wrap(sampleB)); pathB.value = "$.data.list"; }
+      silentDetect();
+    }
+
+    /* --------- 导出 --------- */
+    async function exportTab(payload){
+      const tab = payload.tab, format = payload.format;
+      if(!result.value) return;
+      let rows = [];
+      let filename = "";
+      if(tab === "diff"){
+        rows = diffFlat.value.map(function(r){
+          return { 主键: r.key, 字段: r.field, "A值": formatCellVal(r.valueA), "B值": formatCellVal(r.valueB) };
+        });
+        filename = "字段差异";
+      }else{
+        const src = result.value[tab] || [];
+        const allF = displayFields.value;
+        rows = src.map(function(r){
+          const item = r.item || r.a || {};
+          const obj = { 主键: r.key };
+          for(const f of allF) obj[f] = formatCellVal(item[f]);
+          return obj;
+        });
+        filename = ({ same: "相同", aOnly: "A独有", bOnly: "B独有" })[tab];
+      }
+      if(rows.length === 0){ ElementPlus.ElMessage.warning("暂无数据可导出"); return; }
+      const stamp = new Date().toISOString().slice(0,19).replace(/[:T]/g,"-");
+      const doExport = function(){
+        if(format === "json"){
+          const blob = new Blob([JSON.stringify(rows, null, 2)], { type: "application/json;charset=utf-8" });
+          saveAs(blob, filename + "_" + stamp + ".json");
+        }else if(format === "csv"){
+          const csv = toCSV(rows);
+          const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
+          saveAs(blob, filename + "_" + stamp + ".csv");
+        }else if(format === "xlsx"){
+          const ws = XLSX.utils.json_to_sheet(rows);
+          const wb = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(wb, ws, filename);
+          XLSX.writeFile(wb, filename + "_" + stamp + ".xlsx");
+        }
+        ElementPlus.ElMessage.success("导出成功: " + filename + " (" + rows.length + " 条)");
+      };
+      try{
+        // 数据量大或走 xlsx 时都上 loading (xlsx 生成开销高)
+        if(rows.length > 5000 || format === "xlsx"){
+          await withLoading("导出 " + filename + "." + format + " ...", rows.length.toLocaleString() + " 条", doExport);
+        }else{
+          doExport();
+        }
+      }catch(e){
+        ElementPlus.ElMessage.error("导出失败: " + e.message);
+      }
+    }
+    function formatCellVal(v){
+      if(v === undefined) return "";
+      if(v === null) return "null";
+      if(typeof v === "object") return JSON.stringify(v);
+      return v;
+    }
+    function toCSV(rows){
+      if(!rows.length) return "";
+      const headers = Object.keys(rows[0]);
+      const escape = function(v){
+        if(v == null) return "";
+        const s = String(v);
+        return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+      };
+      const lines = [headers.map(escape).join(",")];
+      for(const row of rows) lines.push(headers.map(function(h){ return escape(row[h]); }).join(","));
+      return lines.join("\r\n");
+    }
+
+    return {
+      editorAEl: editorAEl, editorBEl: editorBEl, wrapAEl: wrapAEl, wrapBEl: wrapBEl, fileInput: fileInput,
+      pathA: pathA, pathB: pathB, lenA: lenA, lenB: lenB,
+      fields: fields, fieldChecked: fieldChecked, fieldSearch: fieldSearch,
+      selectedFieldsList: selectedFieldsList, filteredFields: filteredFields,
+      compareMode: compareMode, modeHint: modeHint,
+      comparing: comparing, loadingText: loadingText, loadingSubText: loadingSubText,
+      result: result, activeTab: activeTab, tabSearch: tabSearch,
+      displayFields: displayFields, diffFlat: diffFlat,
+      detectFieldsFromInputs: detectFieldsFromInputs, selectAllFields: selectAllFields,
+      doCompare: doCompare, swap: swap,
+      formatJson: formatJson, minifyJson: minifyJson, clearJson: clearJson, clearAll: clearAll,
+      pickFile: pickFile, onFilePicked: onFilePicked,
+      autoPath: autoPath, loadSample: loadSample,
+      exportTab: exportTab,
+      candidatesA: candidatesA, candidatesB: candidatesB,
+      candLoadingA: candLoadingA, candLoadingB: candLoadingB,
+      popoverAOpen: popoverAOpen, popoverBOpen: popoverBOpen,
+      openCandidates: openCandidates, selectCandidate: selectCandidate
+    };
+  }
+};
+
+const app = createApp(App);
+app.use(ElementPlus);
+app.mount("#app");
+</script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+bin/
+obj/
+node_modules/
+dist/
+.idea/
+.vscode/
+backend/JsonDiffPlatform.Api/data/
+*.user
+*.suo
+frontend/vite.config.js
+frontend/vite.config.d.ts
