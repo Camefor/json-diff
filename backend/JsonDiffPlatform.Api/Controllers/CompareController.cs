@@ -60,7 +60,7 @@ public sealed class CompareController : ControllerBase
             var oldResponse = await ExecuteRequestAsync(request.OldRequest, cancellationToken);
             var newResponse = await ExecuteRequestAsync(request.NewRequest, cancellationToken);
             var result = _comparisonService.Compare(oldResponse.Body, newResponse.Body, request.Options);
-            await SaveHistoryAsync(request.Name ?? "接口比较", "interface", oldResponse.Body, newResponse.Body, request.Options, result, cancellationToken);
+            await SaveHistoryAsync(request.Name ?? "接口比较", "interface", oldResponse.Body, newResponse.Body, request.Options, result, cancellationToken, request.OldRequest, request.NewRequest);
 
             return Ok(new InterfaceCompareResponse
             {
@@ -133,7 +133,9 @@ public sealed class CompareController : ControllerBase
         string newJson,
         CompareOptions options,
         CompareJsonResponse result,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        InterfaceRequest? oldRequest = null,
+        InterfaceRequest? newRequest = null)
     {
         await _historyStore.SaveAsync(new HistoryRecord
         {
@@ -144,7 +146,10 @@ public sealed class CompareController : ControllerBase
             OldJson = oldJson,
             NewJson = newJson,
             Options = options,
-            Result = result
+            Result = result,
+            // 仅接口比较场景下携带请求快照，前端据此回填到「接口比较」页面
+            OldRequest = oldRequest,
+            NewRequest = newRequest
         }, cancellationToken);
     }
 

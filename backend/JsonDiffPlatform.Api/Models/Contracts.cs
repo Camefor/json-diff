@@ -138,6 +138,9 @@ public sealed class HistoryRecord
     public string NewJson { get; set; } = "{}";
     public CompareOptions Options { get; set; } = new();
     public CompareJsonResponse Result { get; set; } = new();
+    // 仅 SourceType=interface 时有值；用于「在接口比较中打开」时回填请求配置
+    public InterfaceRequest? OldRequest { get; set; }
+    public InterfaceRequest? NewRequest { get; set; }
 }
 
 public sealed class HistorySummary
@@ -149,6 +152,9 @@ public sealed class HistorySummary
     public bool IsEqual { get; set; }
     public long DurationMs { get; set; }
     public DifferenceSummary Summary { get; set; } = new();
+    // 仅 SourceType=interface 时有值，列表展示用
+    public string OldUrl { get; set; } = string.Empty;
+    public string NewUrl { get; set; } = string.Empty;
 }
 
 public sealed class HistoryQueryResponse

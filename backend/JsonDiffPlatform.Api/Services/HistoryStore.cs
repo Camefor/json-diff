@@ -32,7 +32,7 @@ public sealed class HistoryStore
             var total = Convert.ToInt32(await countCommand.ExecuteScalarAsync(cancellationToken), CultureInfo.InvariantCulture);
 
             await using var command = connection.CreateCommand();
-            command.CommandText = "SELECT id, name, source_type, created_at, result_json FROM history WHERE ($keyword = '' OR instr(lower(name), lower($keyword)) > 0) ORDER BY created_at DESC LIMIT $pageSize OFFSET $offset;";
+            command.CommandText = "SELECT id, name, source_type, created_at, result_json, old_request_json, new_request_json FROM history WHERE ($keyword = '' OR instr(lower(name), lower($keyword)) > 0) ORDER BY created_at DESC LIMIT $pageSize OFFSET $offset;";
             command.Parameters.AddWithValue("$keyword", keyword?.Trim() ?? string.Empty);
             command.Parameters.AddWithValue("$pageSize", pageSize);
             command.Parameters.AddWithValue("$offset", (page - 1) * pageSize);
@@ -58,7 +58,7 @@ public sealed class HistoryStore
         {
             await using var connection = await _database.OpenAsync(cancellationToken);
             await using var command = connection.CreateCommand();
-            command.CommandText = "SELECT id, name, source_type, created_at, old_json, new_json, options_json, result_json FROM history WHERE id = $id LIMIT 1;";
+            command.CommandText = "SELECT id, name, source_type, created_at, old_json, new_json, options_json, result_json, old_request_json, new_request_json FROM history WHERE id = $id LIMIT 1;";
             command.Parameters.AddWithValue("$id", id);
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
             return await reader.ReadAsync(cancellationToken) ? ReadRecord(reader) : null;
@@ -80,8 +80,8 @@ public sealed class HistoryStore
             await using var command = connection.CreateCommand();
             command.Transaction = transaction;
             command.CommandText = """
-                INSERT INTO history (id, name, source_type, created_at, old_json, new_json, options_json, result_json)
-                VALUES ($id, $name, $sourceType, $createdAt, $oldJson, $newJson, $optionsJson, $resultJson)
+                INSERT INTO history (id, name, source_type, created_at, old_json, new_json, options_json, result_json, old_request_json, new_request_json)
+                VALUES ($id, $name, $sourceType, $createdAt, $oldJson, $newJson, $optionsJson, $resultJson, $oldRequestJson, $newRequestJson)
                 ON CONFLICT(id) DO UPDATE SET
                     name = excluded.name,
                     source_type = excluded.source_type,
@@ -89,7 +89,9 @@ public sealed class HistoryStore
                     old_json = excluded.old_json,
                     new_json = excluded.new_json,
                     options_json = excluded.options_json,
-                    result_json = excluded.result_json;
+                    result_json = excluded.result_json,
+                    old_request_json = excluded.old_request_json,
+                    new_request_json = excluded.new_request_json;
                 DELETE FROM history WHERE id IN (
                     SELECT id FROM history ORDER BY created_at DESC LIMIT -1 OFFSET 200
                 );
@@ -102,6 +104,8 @@ public sealed class HistoryStore
             command.Parameters.AddWithValue("$newJson", record.NewJson);
             command.Parameters.AddWithValue("$optionsJson", JsonSerializer.Serialize(record.Options, _jsonOptions));
             command.Parameters.AddWithValue("$resultJson", JsonSerializer.Serialize(record.Result, _jsonOptions));
+            command.Parameters.AddWithValue("$oldRequestJson", JsonSerializer.Serialize(record.OldRequest, _jsonOptions));
+            command.Parameters.AddWithValue("$newRequestJson", JsonSerializer.Serialize(record.NewRequest, _jsonOptions));
             await command.ExecuteNonQueryAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
         }
@@ -131,6 +135,8 @@ public sealed class HistoryStore
     private HistorySummary ReadSummary(SqliteDataReader reader)
     {
         var result = Deserialize<CompareJsonResponse>(reader.GetString(4)) ?? new CompareJsonResponse();
+        var oldRequest = Deserialize<InterfaceRequest>(reader.GetString(5));
+        var newRequest = Deserialize<InterfaceRequest>(reader.GetString(6));
         return new HistorySummary
         {
             Id = reader.GetString(0),
@@ -139,7 +145,9 @@ public sealed class HistoryStore
             CreatedAt = ParseDate(reader.GetString(3)),
             IsEqual = result.IsEqual,
             DurationMs = result.DurationMs,
-            Summary = result.Summary
+            Summary = result.Summary,
+            OldUrl = oldRequest?.Url ?? string.Empty,
+            NewUrl = newRequest?.Url ?? string.Empty
         };
     }
 
@@ -154,7 +162,9 @@ public sealed class HistoryStore
             OldJson = reader.GetString(4),
             NewJson = reader.GetString(5),
             Options = Deserialize<JsonCompareOptions>(reader.GetString(6)) ?? new JsonCompareOptions(),
-            Result = Deserialize<CompareJsonResponse>(reader.GetString(7)) ?? new CompareJsonResponse()
+            Result = Deserialize<CompareJsonResponse>(reader.GetString(7)) ?? new CompareJsonResponse(),
+            OldRequest = Deserialize<InterfaceRequest>(reader.GetString(8)),
+            NewRequest = Deserialize<InterfaceRequest>(reader.GetString(9))
         };
     }
 

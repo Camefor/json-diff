@@ -122,6 +122,9 @@ export interface HistorySummary {
   isEqual: boolean
   durationMs: number
   summary: DifferenceSummary
+  // 接口类型历史才有值，用于列表展示
+  oldUrl?: string
+  newUrl?: string
 }
 
 export interface HistoryQueryResponse {
@@ -136,6 +139,9 @@ export interface HistoryRecord extends HistorySummary {
   newJson: string
   options: CompareOptions
   result: CompareJsonResponse
+  // 接口类型历史才有值，用于跳转回填
+  oldRequest?: InterfaceRequest | null
+  newRequest?: InterfaceRequest | null
 }
 
 export interface CompareProfile {

@@ -1,14 +1,16 @@
 ﻿<script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { ChevronDown, Clock3, FileJson2, Globe2, Play, Plus, Settings2, ShieldCheck, Trash2 } from 'lucide-vue-next'
 import { ElMessage } from 'element-plus'
 import DiffSummary from '../components/DiffSummary.vue'
 import DiffTable from '../components/DiffTable.vue'
 import AdvancedOptionsDrawer from '../components/AdvancedOptionsDrawer.vue'
 import { api, apiErrorMessage } from '../api'
+import { useAppStore } from '../stores/app'
 import { defaultOptions } from '../types'
 import type { CompareOptions, InterfaceCompareResponse, InterfaceRequest } from '../types'
 
+const appStore = useAppStore()
 const oldRequest = ref<InterfaceRequest>({ url: 'http://localhost:5297/api/health', method: 'GET', headers: {}, query: {}, body: '' })
 const newRequest = ref<InterfaceRequest>({ url: 'http://localhost:5297/api/health', method: 'GET', headers: {}, query: {}, body: '' })
 const oldHeadersText = ref('{}')
@@ -58,6 +60,27 @@ function addHeader(side: 'old' | 'new') {
 function clearRequest(side: 'old' | 'new') {
   if (side === 'old') { oldHeadersText.value = '{}'; oldQueryText.value = '{}'; oldRequest.value.body = '' } else { newHeadersText.value = '{}'; newQueryText.value = '{}'; newRequest.value.body = '' }
 }
+
+// 从历史记录跳转过来时，store 里携带了请求快照，回填到表单
+onMounted(() => {
+  const payload = appStore.consumeInterfaceRestore()
+  if (!payload) return
+  const normalize = (request: InterfaceRequest): InterfaceRequest => ({
+    url: request.url ?? '',
+    method: request.method ?? 'GET',
+    headers: { ...(request.headers ?? {}) },
+    query: { ...(request.query ?? {}) },
+    body: request.body ?? '',
+  })
+  oldRequest.value = normalize(payload.oldRequest)
+  newRequest.value = normalize(payload.newRequest)
+  oldHeadersText.value = JSON.stringify(oldRequest.value.headers, null, 2)
+  newHeadersText.value = JSON.stringify(newRequest.value.headers, null, 2)
+  oldQueryText.value = JSON.stringify(oldRequest.value.query, null, 2)
+  newQueryText.value = JSON.stringify(newRequest.value.query, null, 2)
+  result.value = null
+  ElMessage.success('已从历史记录回填接口请求')
+})
 </script>
 
 <template>
