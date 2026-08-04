@@ -36,7 +36,8 @@ public sealed class SqliteStore
                 options_json TEXT NOT NULL,
                 result_json TEXT NOT NULL,
                 old_request_json TEXT NOT NULL DEFAULT '{}',
-                new_request_json TEXT NOT NULL DEFAULT '{}'
+                new_request_json TEXT NOT NULL DEFAULT '{}',
+                history_key TEXT NULL
             );
             CREATE INDEX IF NOT EXISTS ix_history_created_at ON history(created_at DESC);
             CREATE TABLE IF NOT EXISTS profiles (
@@ -51,6 +52,12 @@ public sealed class SqliteStore
         // 老库兼容：缺失的请求快照列以 ALTER TABLE 补齐，避免破坏已有历史数据
         await EnsureColumnAsync(connection, "history", "old_request_json", "TEXT NOT NULL DEFAULT '{}'", cancellationToken);
         await EnsureColumnAsync(connection, "history", "new_request_json", "TEXT NOT NULL DEFAULT '{}'", cancellationToken);
+        await EnsureColumnAsync(connection, "history", "history_key", "TEXT NULL", cancellationToken);
+
+        // 仅对新写入的接口历史建立唯一约束；NULL 允许普通 JSON 和批量比较继续逐次保存。
+        await using var indexCommand = connection.CreateCommand();
+        indexCommand.CommandText = "CREATE UNIQUE INDEX IF NOT EXISTS ux_history_key ON history(history_key) WHERE history_key IS NOT NULL;";
+        await indexCommand.ExecuteNonQueryAsync(cancellationToken);
     }
 
     private static async Task EnsureColumnAsync(SqliteConnection connection, string table, string column, string definition, CancellationToken cancellationToken)

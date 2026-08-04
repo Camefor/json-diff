@@ -69,7 +69,7 @@ public sealed class HistoryStore
         }
     }
 
-    public async Task SaveAsync(HistoryRecord record, CancellationToken cancellationToken)
+    public async Task SaveAsync(HistoryRecord record, CancellationToken cancellationToken, string? historyKey = null)
     {
         await _mutex.WaitAsync(cancellationToken);
         try
@@ -80,8 +80,20 @@ public sealed class HistoryStore
             await using var command = connection.CreateCommand();
             command.Transaction = transaction;
             command.CommandText = """
-                INSERT INTO history (id, name, source_type, created_at, old_json, new_json, options_json, result_json, old_request_json, new_request_json)
-                VALUES ($id, $name, $sourceType, $createdAt, $oldJson, $newJson, $optionsJson, $resultJson, $oldRequestJson, $newRequestJson)
+                INSERT INTO history (id, name, source_type, created_at, old_json, new_json, options_json, result_json, old_request_json, new_request_json, history_key)
+                VALUES ($id, $name, $sourceType, $createdAt, $oldJson, $newJson, $optionsJson, $resultJson, $oldRequestJson, $newRequestJson, $historyKey)
+                ON CONFLICT(history_key) WHERE history_key IS NOT NULL DO UPDATE SET
+                    id = excluded.id,
+                    name = excluded.name,
+                    source_type = excluded.source_type,
+                    created_at = excluded.created_at,
+                    old_json = excluded.old_json,
+                    new_json = excluded.new_json,
+                    options_json = excluded.options_json,
+                    result_json = excluded.result_json,
+                    old_request_json = excluded.old_request_json,
+                    new_request_json = excluded.new_request_json,
+                    history_key = excluded.history_key
                 ON CONFLICT(id) DO UPDATE SET
                     name = excluded.name,
                     source_type = excluded.source_type,
@@ -91,7 +103,8 @@ public sealed class HistoryStore
                     options_json = excluded.options_json,
                     result_json = excluded.result_json,
                     old_request_json = excluded.old_request_json,
-                    new_request_json = excluded.new_request_json;
+                    new_request_json = excluded.new_request_json,
+                    history_key = excluded.history_key;
                 DELETE FROM history WHERE id IN (
                     SELECT id FROM history ORDER BY created_at DESC LIMIT -1 OFFSET 200
                 );
@@ -106,6 +119,8 @@ public sealed class HistoryStore
             command.Parameters.AddWithValue("$resultJson", JsonSerializer.Serialize(record.Result, _jsonOptions));
             command.Parameters.AddWithValue("$oldRequestJson", JsonSerializer.Serialize(record.OldRequest, _jsonOptions));
             command.Parameters.AddWithValue("$newRequestJson", JsonSerializer.Serialize(record.NewRequest, _jsonOptions));
+            // 非接口比较使用 NULL，使唯一索引只约束拥有目标 URL 的接口历史。
+            command.Parameters.AddWithValue("$historyKey", string.IsNullOrWhiteSpace(historyKey) ? DBNull.Value : historyKey);
             await command.ExecuteNonQueryAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
         }
