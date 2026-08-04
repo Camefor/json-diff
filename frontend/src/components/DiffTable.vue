@@ -27,9 +27,39 @@ function pretty(value: string | null) {
   try { return JSON.stringify(JSON.parse(value), null, 2) } catch { return value }
 }
 
+function copyPathFallback(path: string) {
+  const textarea = document.createElement('textarea')
+  textarea.value = path
+  textarea.setAttribute('readonly', '')
+  textarea.style.position = 'fixed'
+  textarea.style.opacity = '0'
+  document.body.appendChild(textarea)
+  textarea.select()
+
+  try {
+    return document.execCommand('copy')
+  } finally {
+    textarea.remove()
+  }
+}
+
 async function copyPath(path: string) {
-  await navigator.clipboard?.writeText(path)
-  ElMessage.success('路径已复制')
+  let copied = false
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(path)
+      copied = true
+    } catch {
+      // Clipboard API 可能因非 HTTPS 或浏览器权限被拒绝，继续尝试兼容复制。
+    }
+  }
+
+  if (!copied) {
+    try { copied = copyPathFallback(path) } catch { copied = false }
+  }
+
+  if (copied) ElMessage.success('路径已复制')
+  else ElMessage.error('路径复制失败，请手动复制')
 }
 </script>
 
