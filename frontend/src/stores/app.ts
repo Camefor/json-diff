@@ -2,8 +2,9 @@
 import { api } from '../api'
 import type { CompareProfile, HistorySummary, InterfaceRequest } from '../types'
 
-// 接口比较页跳转时一次性携带的请求载荷：写入后由 InterfaceView 消费并清空
+// 接口比较页跳转时一次性携带场景名称和请求快照：写入后由 InterfaceView 消费并清空
 export interface InterfaceRestorePayload {
+  name: string
   oldRequest: InterfaceRequest
   newRequest: InterfaceRequest
 }
