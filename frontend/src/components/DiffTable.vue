@@ -24,6 +24,8 @@ function kindLabel(kind: DiffKind) {
 
 function pretty(value: string | null) {
   if (value === null) return '∅'
+  // 数值明细直接展示后端原文，避免 JSON.parse 将大数小数舍入后掩盖真实精度。
+  if (/^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$/.test(value.trim())) return value
   try { return JSON.stringify(JSON.parse(value), null, 2) } catch { return value }
 }
 

@@ -271,14 +271,41 @@ public sealed class JsonComparisonService
 
     private static bool AreValuesEqual(JsonNode oldNode, JsonNode newNode, JsonCompareOptions options)
     {
+        var oldJson = CanonicalJson(oldNode);
+        var newJson = CanonicalJson(newNode);
+        if (string.Equals(oldJson, newJson, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
         if (TryGetNumber(oldNode, out var oldNumber) && TryGetNumber(newNode, out var newNumber))
         {
             var tolerance = Math.Max(Math.Abs(options.NumericTolerance), Math.Abs(options.FloatEpsilon));
-            return Math.Abs(oldNumber - newNumber) <= tolerance;
+            if (Math.Abs(oldNumber - newNumber) <= tolerance)
+            {
+                return true;
+            }
         }
 
-        return string.Equals(CanonicalJson(oldNode), CanonicalJson(newNode), StringComparison.Ordinal);
+        // 浏览器按 IEEE 754 双精度数展示 JSON；两个小数字面量落入同一表示时应视为相等，避免明细显示相同却判为变化。
+        return AreEquivalentFloatingPointValues(oldJson, newJson);
     }
+
+    private static bool AreEquivalentFloatingPointValues(string oldJson, string newJson)
+    {
+        if (!IsFloatingPointLiteral(oldJson) || !IsFloatingPointLiteral(newJson))
+        {
+            return false;
+        }
+
+        return double.TryParse(oldJson, NumberStyles.Float, CultureInfo.InvariantCulture, out var oldValue)
+            && double.TryParse(newJson, NumberStyles.Float, CultureInfo.InvariantCulture, out var newValue)
+            && double.IsFinite(oldValue)
+            && double.IsFinite(newValue)
+            && oldValue.Equals(newValue);
+    }
+
+    private static bool IsFloatingPointLiteral(string value) => value.Contains('.') || value.Contains('e') || value.Contains('E');
 
     private static bool TryGetNumber(JsonNode node, out decimal number)
     {
